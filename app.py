@@ -46,11 +46,24 @@ ACTIVITIES = {
 EDO_COLORS = ["#2C2C2C", "#E34234", "#2A5CAA", "#8C9E5E"]
 
 # 大賞閣：點數經濟兌換品項（已硬編碼，圖片請放在 app.py 同一個資料夾）
+# image 為「不含副檔名」的檔名，實際讀取時會自動嘗試 .png / .jpg / .jpeg
 REWARDS = [
-    {"label": "夢幻樂高組合", "price": 20000, "image": "lego.jpg"},
-    {"label": "頂級私廚：喜相逢尊榮席", "price": 6000, "image": "restaurant.jpg"},
-    {"label": "傳奇殿堂：百達翡麗名錶", "price": 1500000, "image": "watch.jpg"},
+    {"label": "夢幻樂高組合", "price": 20000, "image": "lego"},
+    {"label": "頂級私廚：喜相逢尊榮席", "price": 6000, "image": "restaurant"},
+    {"label": "傳奇殿堂：百達翡麗名錶", "price": 1500000, "image": "watch"},
 ]
+
+# 圖片可能是 .png、.jpg 或 .jpeg，依序尋找第一個存在的檔案
+IMAGE_EXTS = (".png", ".jpg", ".jpeg")
+
+
+def find_image(base_name: str):
+    """依序尋找 base_name.png / .jpg / .jpeg，回傳第一個存在的檔案路徑；找不到則回傳 None。"""
+    for ext in IMAGE_EXTS:
+        path = base_name + ext
+        if os.path.exists(path):
+            return path
+    return None
 
 # ----------------------------
 # 隨機圖卡彩蛋設定
@@ -477,8 +490,9 @@ with st.container(border=True):
         owned = label in redeemed_items
 
         with col:
-            if os.path.exists(image):
-                st.image(image, use_container_width=True)
+            img_path = find_image(image)
+            if img_path:
+                st.image(img_path, use_container_width=True)
 
             st.markdown(f"**{label}**")
             st.caption(f"{price:,} 點")
