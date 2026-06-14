@@ -321,6 +321,29 @@ st.markdown(
         border-radius: 12px;
     }
 
+    /* 氣韻存摺：莊重醒目的大字點數顯示 */
+    .qiyun-balance {
+        font-family: 'Noto Serif TC', serif;
+        font-size: 2rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        color: #2C2C2C;
+        margin: 0.1em 0 0.2em 0;
+    }
+
+    /* 大賞閣：已擁有的戰利品標記 */
+    .reward-owned-badge {
+        display: inline-block;
+        background-color: #E34234;
+        color: #FDFBF7;
+        font-size: 0.8rem;
+        font-weight: 600;
+        letter-spacing: 0.15em;
+        padding: 0.2em 0.9em;
+        border-radius: 999px;
+        margin: 0.4em 0;
+    }
+
     /* 和紙紋理卡片容器：淺灰底 + 極淡的纖維紋理，營造「紙張」的層次感 */
     .wood-card-marker {
         display: none;
@@ -410,11 +433,14 @@ redeemed_items = set(redemptions_df["item"]) if not redemptions_df.empty else se
 
 available_points = total_earned - total_spent
 
-# 1. 可用點數（存款餘額），包在和紙紋理容器中
+# 1. 氣韻存摺，包在和紙紋理容器中
 with st.container(border=True):
     st.markdown('<div class="wood-card-marker"></div>', unsafe_allow_html=True)
 
-    st.subheader(f"目前可用點數（存款餘額）：{available_points:,}")
+    st.markdown(
+        f'<div class="qiyun-balance">目前積蓄的氣韻：{available_points:,}</div>',
+        unsafe_allow_html=True,
+    )
     st.caption(f"歷史總累積點數：{total_earned:,}")
 
 # 2. 一鍵紀錄按鈕（每個分類各自一個和紙紋理容器，按鈕等寬並排）
@@ -439,33 +465,42 @@ for zone, items in ACTIVITIES.items():
 
 st.divider()
 
-# 大賞閣：點數經濟與戰利品庫
+# 大賞閣：常駐畫廊，三圖並立，永久陳列目標牆
 st.subheader("【大賞閣】")
 
 with st.container(border=True):
     st.markdown('<div class="wood-card-marker"></div>', unsafe_allow_html=True)
 
-    for idx, reward in enumerate(REWARDS):
+    cols = st.columns(len(REWARDS))
+    for col, (idx, reward) in zip(cols, enumerate(REWARDS)):
         label, price, image = reward["label"], reward["price"], reward["image"]
+        owned = label in redeemed_items
 
-        if label in redeemed_items:
-            st.markdown(f"**{label}**（{price:,} 點）－ 已收藏")
+        with col:
             if os.path.exists(image):
                 st.image(image, use_container_width=True)
-        else:
-            st.markdown(f"**{label}**（{price:,} 點）")
-            if st.button(
-                "兌換",
-                use_container_width=True,
-                disabled=available_points < price,
-                key=f"redeem_{idx}",
-            ):
-                log_redemption(label, price)
-                trigger_easter_egg()
-                st.rerun()
 
-        if idx < len(REWARDS) - 1:
-            st.divider()
+            st.markdown(f"**{label}**")
+            st.caption(f"{price:,} 點")
+
+            if owned:
+                st.markdown('<div class="reward-owned-badge">已擁有</div>', unsafe_allow_html=True)
+                st.button(
+                    "✅ 已將此賞存入繪卷",
+                    use_container_width=True,
+                    disabled=True,
+                    key=f"redeemed_{idx}",
+                )
+            else:
+                if st.button(
+                    "兌換",
+                    use_container_width=True,
+                    disabled=available_points < price,
+                    key=f"redeem_{idx}",
+                ):
+                    log_redemption(label, price)
+                    trigger_easter_egg()
+                    st.rerun()
 
 st.divider()
 
