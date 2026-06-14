@@ -310,19 +310,15 @@ st.markdown(
         border-radius: 12px;
     }
 
-    /* 木紋壓印容器：用淺灰底 + 極淡的細紋模擬木板壓印在和紙上的層次感 */
+    /* 和紙紋理卡片容器：淺灰底 + 極淡的纖維紋理，營造「紙張」的層次感 */
     .wood-card-marker {
         display: none;
     }
     div[data-testid="stVerticalBlockBorderWrapper"]:has(.wood-card-marker) {
         background-color: #F0EBE1;
-        background-image: repeating-linear-gradient(
-            100deg,
-            rgba(44, 44, 44, 0.05) 0px,
-            rgba(44, 44, 44, 0.05) 1px,
-            transparent 1px,
-            transparent 9px
-        );
+        background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIj4KPGZpbHRlciBpZD0ibiI+CjxmZVR1cmJ1bGVuY2UgdHlwZT0iZnJhY3RhbE5vaXNlIiBiYXNlRnJlcXVlbmN5PSIwLjg1IiBudW1PY3RhdmVzPSI0IiBzdGl0Y2hUaWxlcz0ic3RpdGNoIiByZXN1bHQ9Im5vaXNlIi8+CjxmZUNvbG9yTWF0cml4IGluPSJub2lzZSIgdHlwZT0ibWF0cml4IiB2YWx1ZXM9IjAgMCAwIDAgMC4xNyAgMCAwIDAgMCAwLjE3ICAwIDAgMCAwIDAuMTcgIDAgMCAwIDAuMTggMCIvPgo8L2ZpbHRlcj4KPHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsdGVyPSJ1cmwoI24pIi8+Cjwvc3ZnPgo=");
+        background-size: 300px 300px;
+        background-repeat: repeat;
         border-radius: 16px;
     }
 
