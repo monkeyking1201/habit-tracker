@@ -283,6 +283,22 @@ st.markdown(
         border-radius: 12px;
     }
 
+    /* 木紋壓印容器：用淺灰底 + 極淡的細紋模擬木板壓印在和紙上的層次感 */
+    .wood-card-marker {
+        display: none;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.wood-card-marker) {
+        background-color: #F0EBE1;
+        background-image: repeating-linear-gradient(
+            100deg,
+            rgba(44, 44, 44, 0.05) 0px,
+            rgba(44, 44, 44, 0.05) 1px,
+            transparent 1px,
+            transparent 9px
+        );
+        border-radius: 16px;
+    }
+
     /* 窄螢幕（手機）進一步調整字級與間距 */
     @media (max-width: 480px) {
         /* 內容整體往下推，避免 Streamlit Cloud 在手機上的管理工具列蓋到橫幅圖片 */
@@ -354,40 +370,43 @@ if st.session_state.pop("egg_hint", False):
 df = load_data()
 total_points = int(df["points"].sum()) if not df.empty else 0
 
-# 1. 總點數與進度條
-st.subheader(f"🎯 目前累積總點數：{total_points:,} / {SEASON_GOAL:,}")
-progress = min(total_points / SEASON_GOAL, 1.0)
-st.progress(progress)
-st.caption(f"本季進度：{progress * 100:.1f}%")
+# 1. 總點數、進度條與一鍵紀錄按鈕（包在木紋壓印容器中）
+with st.container(border=True):
+    st.markdown('<div class="wood-card-marker"></div>', unsafe_allow_html=True)
 
-st.divider()
+    st.subheader(f"🎯 目前累積總點數：{total_points:,} / {SEASON_GOAL:,}")
+    progress = min(total_points / SEASON_GOAL, 1.0)
+    st.progress(progress)
+    st.caption(f"本季進度：{progress * 100:.1f}%")
 
-# 2. 一鍵紀錄按鈕
-st.subheader("✅ 點擊紀錄")
+    st.divider()
 
-for zone, items in ACTIVITIES.items():
-    st.markdown(f"**【{zone}】（每次 {list(items.values())[0]} 點）**")
-    cols = st.columns(len(items))
-    for col, (label, pts) in zip(cols, items.items()):
-        if col.button(label, use_container_width=True, key=f"btn_{label}"):
-            append_record(label, pts)
-            st.toast(f"已記錄：{label} (+{pts} 點)", icon="✅")
+    # 2. 一鍵紀錄按鈕
+    st.subheader("✅ 點擊紀錄")
 
-            # 觸發貓咪圖卡彩蛋
-            if label in EASTER_EGG_TRIGGERS:
-                egg_path = get_random_easter_egg()
-                if egg_path:
-                    quote = get_random_quote()
-                    log_easter_egg(egg_path, quote)
-                    st.session_state["easter_egg"] = {
-                        "image": egg_path,
-                        "phrase": random.choice(EASTER_EGG_PHRASES),
-                        "quote": quote,
-                    }
-                else:
-                    st.session_state["egg_hint"] = True
+    for zone, items in ACTIVITIES.items():
+        st.markdown(f"**【{zone}】（每次 {list(items.values())[0]} 點）**")
+        cols = st.columns(len(items))
+        for col, (label, pts) in zip(cols, items.items()):
+            if col.button(label, use_container_width=True, key=f"btn_{label}"):
+                append_record(label, pts)
+                st.toast(f"已記錄：{label} (+{pts} 點)", icon="✅")
 
-            st.rerun()
+                # 觸發貓咪圖卡彩蛋
+                if label in EASTER_EGG_TRIGGERS:
+                    egg_path = get_random_easter_egg()
+                    if egg_path:
+                        quote = get_random_quote()
+                        log_easter_egg(egg_path, quote)
+                        st.session_state["easter_egg"] = {
+                            "image": egg_path,
+                            "phrase": random.choice(EASTER_EGG_PHRASES),
+                            "quote": quote,
+                        }
+                    else:
+                        st.session_state["egg_hint"] = True
+
+                st.rerun()
 
 # 自訂項目
 custom_items = load_custom_activities()
