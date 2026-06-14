@@ -18,25 +18,25 @@ def now_str() -> str:
 # ----------------------------
 # 基本設定
 # ----------------------------
-st.set_page_config(page_title="個人行為模式追蹤儀表板", page_icon="🌱", layout="centered")
+st.set_page_config(page_title="個人行為模式追蹤儀表板", page_icon=None, layout="centered")
 
 SEASON_GOAL = 10000  # 本季目標總點數
 
 # 活動清單與點數權重
 ACTIVITIES = {
     "登高": {
-        "📖 看書（40頁）": 500,
-        "🖌️ 寫書法": 500,
-        "🐱 帶貓散步": 500,
+        "看書（40頁）": 500,
+        "寫書法": 500,
+        "帶貓散步": 500,
     },
     "乘興": {
-        "🧹 打掃（清動線）": 300,
-        "♟️ 擺棋": 300,
-        "📜 讀聖經": 300,
+        "打掃（清動線）": 300,
+        "擺棋": 300,
+        "讀聖經": 300,
     },
     "拾趣": {
-        "🐾 幫貓梳毛": 150,
-        "👍 稱讚別人": 150,
+        "幫貓梳毛": 150,
+        "稱讚別人": 150,
     },
 }
 
@@ -50,7 +50,7 @@ EASTER_EGG_DIR = "cat_easter_eggs"
 EASTER_EGG_EXTS = (".png", ".jpg", ".jpeg")
 
 # 點擊以下活動時，有機會觸發貓咪圖卡彩蛋
-EASTER_EGG_TRIGGERS = {"🐱 帶貓散步", "🐾 幫貓梳毛"}
+EASTER_EGG_TRIGGERS = {"帶貓散步", "幫貓梳毛"}
 
 EASTER_EGG_PHRASES = [
     "主子表示滿意！",
@@ -102,7 +102,7 @@ def get_spreadsheet():
         sheet_url = st.secrets["gsheet_url"]
     except KeyError:
         st.error(
-            "⚠️ 尚未設定 Google Sheets 連線資訊。\n\n"
+            "尚未設定 Google Sheets 連線資訊。\n\n"
             "請依照「Google試算表設定指南.md」完成服務帳號與 secrets 設定後，再重新整理這個頁面。"
         )
         st.stop()
@@ -113,7 +113,7 @@ def get_spreadsheet():
         return client.open_by_url(sheet_url)
     except Exception as e:
         st.error(
-            "⚠️ 無法連線到 Google Sheets，請檢查：\n"
+            "無法連線到 Google Sheets，請檢查：\n"
             "1. secrets 內容是否完整正確\n"
             "2. 該 Google 試算表是否已分享給服務帳號信箱（編輯者權限）\n\n"
             f"錯誤訊息：{e}"
@@ -232,7 +232,7 @@ def get_random_quote():
         return None
 
 
-@st.dialog("🎁 抽到隱藏圖卡！")
+@st.dialog("抽到隱藏圖卡！")
 def show_easter_egg_dialog(image_path, phrase, quote):
     st.image(image_path, use_container_width=True)
     st.markdown(f"<h3 style='text-align:center;'>{phrase}</h3>", unsafe_allow_html=True)
@@ -241,7 +241,7 @@ def show_easter_egg_dialog(image_path, phrase, quote):
             f"<p style='text-align:center; color:#888; font-style:italic;'>「{quote}」</p>",
             unsafe_allow_html=True,
         )
-    if st.button("收下這份心意 💖", use_container_width=True):
+    if st.button("收下這份心意", use_container_width=True):
         st.session_state.pop("easter_egg", None)
         st.rerun()
 
@@ -361,7 +361,7 @@ st.title("浮世貓百景：日常行為繪卷")
 st.caption("落子、掃拭、賞貓，鐫刻專屬的行為版畫")
 
 # 加到手機主畫面教學
-with st.expander("📱 把這個網頁加到手機主畫面，當 App 使用"):
+with st.expander("把這個網頁加到手機主畫面，當 App 使用"):
     st.markdown(
         """
 **iPhone（Safari 瀏覽器）**
@@ -388,7 +388,7 @@ if "easter_egg" in st.session_state:
 
 # 找不到圖庫資料夾/沒有圖片時的溫和提示（只顯示一次）
 if st.session_state.pop("egg_hint", False):
-    st.info("📂 請將專屬畫作放入 cat_easter_eggs 資料夾以解鎖彩蛋", icon="🐈")
+    st.info("請將專屬畫作放入 cat_easter_eggs 資料夾以解鎖彩蛋")
 
 df = load_data()
 total_points = int(df["points"].sum()) if not df.empty else 0
@@ -397,7 +397,7 @@ total_points = int(df["points"].sum()) if not df.empty else 0
 with st.container(border=True):
     st.markdown('<div class="wood-card-marker"></div>', unsafe_allow_html=True)
 
-    st.subheader(f"🎯 目前累積總點數：{total_points:,} / {SEASON_GOAL:,}")
+    st.subheader(f"目前累積總點數：{total_points:,} / {SEASON_GOAL:,}")
     progress = min(total_points / SEASON_GOAL, 1.0)
     st.progress(progress)
     st.caption(f"本季進度：{progress * 100:.1f}%")
@@ -405,7 +405,7 @@ with st.container(border=True):
     st.divider()
 
     # 2. 一鍵紀錄按鈕
-    st.subheader("✅ 點擊紀錄")
+    st.subheader("點擊紀錄")
 
     for zone, items in ACTIVITIES.items():
         st.markdown(f"**【{zone}】（每次 {list(items.values())[0]} 點）**")
@@ -413,7 +413,7 @@ with st.container(border=True):
         for col, (label, pts) in zip(cols, items.items()):
             if col.button(label, use_container_width=True, key=f"btn_{label}"):
                 append_record(label, pts)
-                st.toast(f"已記錄：{label} (+{pts} 點)", icon="✅")
+                st.toast(f"已記錄：{label} (+{pts} 點)")
 
                 # 觸發貓咪圖卡彩蛋
                 if label in EASTER_EGG_TRIGGERS:
@@ -435,17 +435,17 @@ with st.container(border=True):
 custom_items = load_custom_activities()
 
 if custom_items:
-    st.markdown("**✨ 自訂項目**")
+    st.markdown("**自訂項目**")
     for i in range(0, len(custom_items), 3):
         cols = st.columns(3)
         for col, item in zip(cols, custom_items[i:i + 3]):
             c_label, c_pts = item["label"], item["points"]
             if col.button(f"{c_label}（{c_pts}點）", use_container_width=True, key=f"btn_custom_{i}_{c_label}"):
                 append_record(c_label, c_pts)
-                st.toast(f"已記錄：{c_label} (+{c_pts} 點)", icon="✅")
+                st.toast(f"已記錄：{c_label} (+{c_pts} 點)")
                 st.rerun()
 
-with st.expander("➕ 新增/管理自訂項目"):
+with st.expander("新增/管理自訂項目"):
     with st.form("add_custom_activity", clear_on_submit=True):
         new_label = st.text_input("項目名稱")
         new_points = st.number_input("點數", min_value=1, max_value=10000, value=100, step=10)
@@ -466,15 +466,15 @@ with st.expander("➕ 新增/管理自訂項目"):
 
 # 撤銷上一筆（避免手滑誤點）
 if not df.empty:
-    with st.expander("⚙️ 其他操作"):
-        if st.button("↩️ 撤銷最後一筆紀錄"):
+    with st.expander("其他操作"):
+        if st.button("撤銷最後一筆紀錄"):
             remove_last_record()
             st.rerun()
 
 st.divider()
 
 # 3. 行為模式視覺化
-st.subheader("📊 行為模式分析（各項目累積次數）")
+st.subheader("行為模式分析（各項目累積次數）")
 
 if not df.empty:
     import plotly.express as px
@@ -519,7 +519,7 @@ else:
 st.divider()
 
 # 4. 我的圖卡收藏
-st.subheader("📚 我的圖卡收藏")
+st.subheader("我的圖卡收藏")
 
 egg_log = load_egg_log()
 if not egg_log.empty:
@@ -559,7 +559,7 @@ with st.expander("點擊展開原始數據紀錄"):
 
         csv_bytes = df.to_csv(index=False).encode("utf-8-sig")
         st.download_button(
-            label="⬇️ 下載 CSV 數據",
+            label="下載 CSV 數據",
             data=csv_bytes,
             file_name="behavior_log.csv",
             mime="text/csv",
