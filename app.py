@@ -22,21 +22,25 @@ st.set_page_config(page_title="個人行為模式追蹤儀表板", page_icon=Non
 
 SEASON_GOAL = 10000  # 本季目標總點數
 
-# 活動清單與點數權重
+# 活動清單與點數權重（已硬編碼，畫面不再提供動態新增功能）
 ACTIVITIES = {
     "登高": {
-        "看書（40頁）": 500,
-        "寫書法": 500,
+        "看書": 500,
+        "書法": 500,
         "帶貓散步": 500,
+        "單車遊騎": 500,
     },
     "乘興": {
-        "打掃（清動線）": 300,
+        "家事（打掃/洗衣）": 300,
         "擺棋": 300,
-        "讀聖經": 300,
+        "晨興與讀經": 300,
+        "健身": 300,
     },
     "拾趣": {
         "幫貓梳毛": 150,
-        "稱讚別人": 150,
+        "稱讚他人": 150,
+        "探索 AI": 150,
+        "讀英文": 150,
     },
 }
 
@@ -86,7 +90,6 @@ GSHEET_SCOPES = [
 
 BEHAVIOR_HEADERS = ["timestamp", "activity", "points"]
 EGG_HEADERS = ["timestamp", "image", "quote"]
-CUSTOM_HEADERS = ["label", "points"]
 
 
 @st.cache_resource(show_spinner=False)
@@ -150,13 +153,6 @@ def append_record(activity: str, points: int) -> None:
     ws.append_row([now_str(), activity, int(points)], value_input_option="USER_ENTERED")
 
 
-def remove_last_record() -> None:
-    ws = get_worksheet("behavior_log", BEHAVIOR_HEADERS)
-    total_rows = len(ws.get_all_values())
-    if total_rows > 1:  # 第 1 列是標題列
-        ws.delete_rows(total_rows)
-
-
 def load_egg_log() -> pd.DataFrame:
     ws = get_worksheet("easter_egg_log", EGG_HEADERS)
     records = ws.get_all_records()
@@ -174,29 +170,6 @@ def log_easter_egg(image_path: str, quote) -> None:
         [now_str(), os.path.basename(image_path), quote or ""],
         value_input_option="USER_ENTERED",
     )
-
-
-def load_custom_activities() -> list:
-    ws = get_worksheet("custom_activities", CUSTOM_HEADERS)
-    records = ws.get_all_records()
-    items = []
-    for r in records:
-        label = str(r.get("label", "")).strip()
-        if not label:
-            continue
-        try:
-            pts = int(float(r.get("points", 0)))
-        except (TypeError, ValueError):
-            pts = 0
-        items.append({"label": label, "points": pts})
-    return items
-
-
-def save_custom_activities(items: list) -> None:
-    ws = get_worksheet("custom_activities", CUSTOM_HEADERS)
-    ws.clear()
-    rows = [CUSTOM_HEADERS] + [[item["label"], item["points"]] for item in items]
-    ws.update(rows)
 
 
 # ----------------------------
@@ -393,7 +366,7 @@ if st.session_state.pop("egg_hint", False):
 df = load_data()
 total_points = int(df["points"].sum()) if not df.empty else 0
 
-# 1. 總點數、進度條與一鍵紀錄按鈕（包在木紋壓印容器中）
+# 1. 總點數與進度條（包在和紙紋理容器中）
 with st.container(border=True):
     st.markdown('<div class="wood-card-marker"></div>', unsafe_allow_html=True)
 
@@ -402,12 +375,13 @@ with st.container(border=True):
     st.progress(progress)
     st.caption(f"本季進度：{progress * 100:.1f}%")
 
-    st.divider()
+# 2. 一鍵紀錄按鈕（每個分類各自一個和紙紋理容器，按鈕等寬並排）
+st.subheader("點擊紀錄")
 
-    # 2. 一鍵紀錄按鈕
-    st.subheader("點擊紀錄")
+for zone, items in ACTIVITIES.items():
+    with st.container(border=True):
+        st.markdown('<div class="wood-card-marker"></div>', unsafe_allow_html=True)
 
-    for zone, items in ACTIVITIES.items():
         st.markdown(f"**【{zone}】（每次 {list(items.values())[0]} 點）**")
         cols = st.columns(len(items))
         for col, (label, pts) in zip(cols, items.items()):
@@ -430,46 +404,6 @@ with st.container(border=True):
                         st.session_state["egg_hint"] = True
 
                 st.rerun()
-
-# 自訂項目
-custom_items = load_custom_activities()
-
-if custom_items:
-    st.markdown("**自訂項目**")
-    for i in range(0, len(custom_items), 3):
-        cols = st.columns(3)
-        for col, item in zip(cols, custom_items[i:i + 3]):
-            c_label, c_pts = item["label"], item["points"]
-            if col.button(f"{c_label}（{c_pts}點）", use_container_width=True, key=f"btn_custom_{i}_{c_label}"):
-                append_record(c_label, c_pts)
-                st.toast(f"已記錄：{c_label} (+{c_pts} 點)")
-                st.rerun()
-
-with st.expander("新增/管理自訂項目"):
-    with st.form("add_custom_activity", clear_on_submit=True):
-        new_label = st.text_input("項目名稱")
-        new_points = st.number_input("點數", min_value=1, max_value=10000, value=100, step=10)
-        if st.form_submit_button("新增") and new_label.strip():
-            custom_items.append({"label": new_label.strip(), "points": int(new_points)})
-            save_custom_activities(custom_items)
-            st.rerun()
-
-    if custom_items:
-        st.markdown("**目前自訂項目：**")
-        for idx, item in enumerate(custom_items):
-            c1, c2 = st.columns([4, 1])
-            c1.write(f"{item['label']}（{item['points']} 點）")
-            if c2.button("刪除", key=f"del_custom_{idx}"):
-                custom_items.pop(idx)
-                save_custom_activities(custom_items)
-                st.rerun()
-
-# 撤銷上一筆（避免手滑誤點）
-if not df.empty:
-    with st.expander("其他操作"):
-        if st.button("撤銷最後一筆紀錄"):
-            remove_last_record()
-            st.rerun()
 
 st.divider()
 
