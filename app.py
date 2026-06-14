@@ -252,6 +252,21 @@ def show_easter_egg_dialog(image_path, phrase, quote):
 st.markdown(
     """
     <style>
+    /* 載入思源宋體 (Noto Serif TC) */
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;500;600;700&display=swap');
+
+    /* 全域字體：強制套用思源宋體，營造典雅的版畫質感 */
+    html, body, [class*="css"], p, div, span,
+    h1, h2, h3, h4, h5, h6,
+    div.stButton > button {
+        font-family: 'Noto Serif TC', serif !important;
+    }
+
+    /* 標題字距加寬，增加呼吸感 */
+    h1, h2, h3, h4, h5, h6 {
+        letter-spacing: 0.05em;
+    }
+
     /* 整體內容區在小螢幕上左右留白縮小，畫面更寬敞 */
     .block-container {
         padding-top: 1.2rem;
@@ -270,6 +285,8 @@ st.markdown(
         white-space: normal;
         word-break: keep-all;
         border-radius: 12px;
+        letter-spacing: 0.05em;
+        padding: 0.6em 1em;
     }
 
     /* 進度條加高，手機上更清楚 */
