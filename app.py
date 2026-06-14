@@ -1,17 +1,25 @@
-import json
 import os
 import random
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
+import gspread
 import pandas as pd
 import streamlit as st
+from google.oauth2.service_account import Credentials
+
+# 雲端伺服器時間可能不是台灣時區，統一用台北時間記錄時間戳記
+TAIPEI_TZ = ZoneInfo("Asia/Taipei")
+
+
+def now_str() -> str:
+    return datetime.now(TAIPEI_TZ).strftime("%Y-%m-%d %H:%M:%S")
 
 # ----------------------------
 # 基本設定
 # ----------------------------
 st.set_page_config(page_title="個人行為模式追蹤儀表板", page_icon="🌱", layout="centered")
 
-CSV_FILE = "behavior_log.csv"
 SEASON_GOAL = 10000  # 本季目標總點數
 
 # 活動清單與點數權重
@@ -71,80 +79,127 @@ if not os.path.exists(QUOTES_FILE):
             "慢慢來，比較快\n"
         )
 
-# 圖卡收藏紀錄檔
-EASTER_EGG_LOG = "easter_egg_log.csv"
+# ----------------------------
+# Google Sheets 連線設定
+# ----------------------------
+GSHEET_SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive",
+]
 
-# 自訂項目設定檔
-CUSTOM_ACTIVITIES_FILE = "custom_activities.json"
+BEHAVIOR_HEADERS = ["timestamp", "activity", "points"]
+EGG_HEADERS = ["timestamp", "image", "quote"]
+CUSTOM_HEADERS = ["label", "points"]
+
+
+@st.cache_resource(show_spinner=False)
+def get_spreadsheet():
+    """連線到 Google Sheets，並回傳整份試算表物件。
+
+    需要在 .streamlit/secrets.toml（本機）或 Streamlit Cloud 的
+    Secrets 設定中，提供 [gcp_service_account] 區塊與 gsheet_url。
+    若尚未設定，會顯示中文提示並停止執行。
+    """
+    try:
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        sheet_url = st.secrets["gsheet_url"]
+    except KeyError:
+        st.error(
+            "⚠️ 尚未設定 Google Sheets 連線資訊。\n\n"
+            "請依照「Google試算表設定指南.md」完成服務帳號與 secrets 設定後，再重新整理這個頁面。"
+        )
+        st.stop()
+
+    try:
+        creds = Credentials.from_service_account_info(creds_dict, scopes=GSHEET_SCOPES)
+        client = gspread.authorize(creds)
+        return client.open_by_url(sheet_url)
+    except Exception as e:
+        st.error(
+            "⚠️ 無法連線到 Google Sheets，請檢查：\n"
+            "1. secrets 內容是否完整正確\n"
+            "2. 該 Google 試算表是否已分享給服務帳號信箱（編輯者權限）\n\n"
+            f"錯誤訊息：{e}"
+        )
+        st.stop()
+
+
+def get_worksheet(name: str, headers: list):
+    """取得指定名稱的工作表，若不存在則自動建立並寫入標題列。"""
+    sh = get_spreadsheet()
+    try:
+        ws = sh.worksheet(name)
+    except gspread.exceptions.WorksheetNotFound:
+        ws = sh.add_worksheet(title=name, rows=2000, cols=max(len(headers), 3))
+        ws.append_row(headers)
+    return ws
 
 
 # ----------------------------
 # 資料讀寫
 # ----------------------------
 def load_data() -> pd.DataFrame:
-    if os.path.exists(CSV_FILE):
-        df = pd.read_csv(CSV_FILE)
-        if not df.empty:
-            df["timestamp"] = pd.to_datetime(df["timestamp"])
-        return df
-    return pd.DataFrame(columns=["timestamp", "activity", "points"])
+    ws = get_worksheet("behavior_log", BEHAVIOR_HEADERS)
+    records = ws.get_all_records()
+    df = pd.DataFrame(records, columns=BEHAVIOR_HEADERS)
+    if not df.empty:
+        df["points"] = pd.to_numeric(df["points"], errors="coerce").fillna(0).astype(int)
+        df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+    return df
 
 
 def append_record(activity: str, points: int) -> None:
-    df = load_data()
-    new_row = pd.DataFrame(
-        [{
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "activity": activity,
-            "points": points,
-        }]
-    )
-    df = pd.concat([df, new_row], ignore_index=True)
-    df.to_csv(CSV_FILE, index=False)
+    ws = get_worksheet("behavior_log", BEHAVIOR_HEADERS)
+    ws.append_row([now_str(), activity, int(points)], value_input_option="USER_ENTERED")
 
 
 def remove_last_record() -> None:
-    df = load_data()
-    if not df.empty:
-        df = df.iloc[:-1]
-        df.to_csv(CSV_FILE, index=False)
+    ws = get_worksheet("behavior_log", BEHAVIOR_HEADERS)
+    total_rows = len(ws.get_all_values())
+    if total_rows > 1:  # 第 1 列是標題列
+        ws.delete_rows(total_rows)
 
 
 def load_egg_log() -> pd.DataFrame:
-    if os.path.exists(EASTER_EGG_LOG):
-        log_df = pd.read_csv(EASTER_EGG_LOG)
-        if "quote" not in log_df.columns:
-            log_df["quote"] = None
-        return log_df
-    return pd.DataFrame(columns=["timestamp", "image", "quote"])
+    ws = get_worksheet("easter_egg_log", EGG_HEADERS)
+    records = ws.get_all_records()
+    df = pd.DataFrame(records, columns=EGG_HEADERS)
+    if "quote" not in df.columns:
+        df["quote"] = None
+    if not df.empty:
+        df["quote"] = df["quote"].replace("", pd.NA)
+    return df
 
 
 def log_easter_egg(image_path: str, quote) -> None:
-    log_df = load_egg_log()
-    new_row = pd.DataFrame(
-        [{
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "image": os.path.basename(image_path),
-            "quote": quote,
-        }]
+    ws = get_worksheet("easter_egg_log", EGG_HEADERS)
+    ws.append_row(
+        [now_str(), os.path.basename(image_path), quote or ""],
+        value_input_option="USER_ENTERED",
     )
-    log_df = pd.concat([log_df, new_row], ignore_index=True)
-    log_df.to_csv(EASTER_EGG_LOG, index=False)
 
 
 def load_custom_activities() -> list:
-    if os.path.exists(CUSTOM_ACTIVITIES_FILE):
+    ws = get_worksheet("custom_activities", CUSTOM_HEADERS)
+    records = ws.get_all_records()
+    items = []
+    for r in records:
+        label = str(r.get("label", "")).strip()
+        if not label:
+            continue
         try:
-            with open(CUSTOM_ACTIVITIES_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return []
-    return []
+            pts = int(float(r.get("points", 0)))
+        except (TypeError, ValueError):
+            pts = 0
+        items.append({"label": label, "points": pts})
+    return items
 
 
 def save_custom_activities(items: list) -> None:
-    with open(CUSTOM_ACTIVITIES_FILE, "w", encoding="utf-8") as f:
-        json.dump(items, f, ensure_ascii=False, indent=2)
+    ws = get_worksheet("custom_activities", CUSTOM_HEADERS)
+    ws.clear()
+    rows = [CUSTOM_HEADERS] + [[item["label"], item["points"]] for item in items]
+    ws.update(rows)
 
 
 # ----------------------------
@@ -256,8 +311,14 @@ st.markdown(
 # ----------------------------
 # 介面
 # ----------------------------
-st.title("🌱 個人行為模式追蹤與分析儀表板")
-st.caption("18 天無壓力行為數據採集計畫 · 每次點擊即自動記錄時間與點數")
+# 置頂橫幅圖片（把 banner.jpg 或 banner.png 放在 app.py 同一個資料夾即可顯示；沒有圖片時自動略過，不會報錯）
+for _banner_name in ("banner.jpg", "banner.jpeg", "banner.png"):
+    if os.path.exists(_banner_name):
+        st.image(_banner_name, use_container_width=True)
+        break
+
+st.title("浮世貓百景：日常行為繪卷")
+st.caption("落子、掃拭、賞貓，鐫刻專屬的行為版畫")
 
 # 加到手機主畫面教學
 with st.expander("📱 把這個網頁加到手機主畫面，當 App 使用"):
