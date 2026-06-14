@@ -256,10 +256,20 @@ st.markdown(
     @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;500;600;700&display=swap');
 
     /* 全域字體：強制套用思源宋體，營造典雅的版畫質感 */
-    html, body, [class*="css"], p, div, span,
+    html, body, [class*="st-"], p, div, span, li, label,
     h1, h2, h3, h4, h5, h6,
     div.stButton > button {
         font-family: 'Noto Serif TC', serif !important;
+    }
+
+    /* 還原圖示用字型：避免展開箭頭、checkbox 勾勾等圖示
+       被思源宋體覆蓋後顯示成 "arrow_xxx" 之類的文字 */
+    [data-testid="stIconMaterial"],
+    [data-testid="stExpanderToggleIcon"],
+    span[class*="material-symbols"],
+    .material-symbols-outlined,
+    .material-symbols-rounded {
+        font-family: 'Material Symbols Rounded', 'Material Symbols Outlined' !important;
     }
 
     /* 標題字距加寬，增加呼吸感 */
