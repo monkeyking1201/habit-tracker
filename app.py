@@ -20,8 +20,6 @@ def now_str() -> str:
 # ----------------------------
 st.set_page_config(page_title="個人行為模式追蹤儀表板", page_icon=None, layout="centered")
 
-SEASON_GOAL = 10000  # 本季目標總點數
-
 # 活動清單與點數權重（已硬編碼，畫面不再提供動態新增功能）
 ACTIVITIES = {
     "登高": {
@@ -46,6 +44,13 @@ ACTIVITIES = {
 
 # 江戶傳統色系，用於圖表配色
 EDO_COLORS = ["#2C2C2C", "#E34234", "#2A5CAA", "#8C9E5E"]
+
+# 大賞閣：點數經濟兌換品項（已硬編碼，圖片請放在 app.py 同一個資料夾）
+REWARDS = [
+    {"label": "夢幻樂高組合", "price": 20000, "image": "lego.jpg"},
+    {"label": "頂級私廚：喜相逢尊榮席", "price": 6000, "image": "restaurant.jpg"},
+    {"label": "傳奇殿堂：百達翡麗名錶", "price": 1500000, "image": "watch.jpg"},
+]
 
 # ----------------------------
 # 隨機圖卡彩蛋設定
@@ -90,6 +95,7 @@ GSHEET_SCOPES = [
 
 BEHAVIOR_HEADERS = ["timestamp", "activity", "points"]
 EGG_HEADERS = ["timestamp", "image", "quote"]
+REDEMPTION_HEADERS = ["timestamp", "item", "cost"]
 
 
 @st.cache_resource(show_spinner=False)
@@ -172,6 +178,21 @@ def log_easter_egg(image_path: str, quote) -> None:
     )
 
 
+def load_redemptions() -> pd.DataFrame:
+    """讀取大賞閣兌換紀錄，用來計算已花費點數與已解鎖的戰利品。"""
+    ws = get_worksheet("redemptions", REDEMPTION_HEADERS)
+    records = ws.get_all_records()
+    df = pd.DataFrame(records, columns=REDEMPTION_HEADERS)
+    if not df.empty:
+        df["cost"] = pd.to_numeric(df["cost"], errors="coerce").fillna(0).astype(int)
+    return df
+
+
+def log_redemption(item: str, cost: int) -> None:
+    ws = get_worksheet("redemptions", REDEMPTION_HEADERS)
+    ws.append_row([now_str(), item, int(cost)], value_input_option="USER_ENTERED")
+
+
 # ----------------------------
 # 彩蛋相關函式
 # ----------------------------
@@ -203,6 +224,23 @@ def get_random_quote():
         return random.choice(quotes)
     except Exception:
         return None
+
+
+def trigger_easter_egg() -> None:
+    """隨機抽取一張貓咪圖卡並記錄；找不到圖片時改顯示提示。
+    供「帶貓散步」「幫貓梳毛」與大賞閣兌換成功時共用。
+    """
+    egg_path = get_random_easter_egg()
+    if egg_path:
+        quote = get_random_quote()
+        log_easter_egg(egg_path, quote)
+        st.session_state["easter_egg"] = {
+            "image": egg_path,
+            "phrase": random.choice(EASTER_EGG_PHRASES),
+            "quote": quote,
+        }
+    else:
+        st.session_state["egg_hint"] = True
 
 
 @st.dialog("抽到隱藏圖卡！")
@@ -364,16 +402,20 @@ if st.session_state.pop("egg_hint", False):
     st.info("請將專屬畫作放入 cat_easter_eggs 資料夾以解鎖彩蛋")
 
 df = load_data()
-total_points = int(df["points"].sum()) if not df.empty else 0
+total_earned = int(df["points"].sum()) if not df.empty else 0
 
-# 1. 總點數與進度條（包在和紙紋理容器中）
+redemptions_df = load_redemptions()
+total_spent = int(redemptions_df["cost"].sum()) if not redemptions_df.empty else 0
+redeemed_items = set(redemptions_df["item"]) if not redemptions_df.empty else set()
+
+available_points = total_earned - total_spent
+
+# 1. 可用點數（存款餘額），包在和紙紋理容器中
 with st.container(border=True):
     st.markdown('<div class="wood-card-marker"></div>', unsafe_allow_html=True)
 
-    st.subheader(f"目前累積總點數：{total_points:,} / {SEASON_GOAL:,}")
-    progress = min(total_points / SEASON_GOAL, 1.0)
-    st.progress(progress)
-    st.caption(f"本季進度：{progress * 100:.1f}%")
+    st.subheader(f"目前可用點數（存款餘額）：{available_points:,}")
+    st.caption(f"歷史總累積點數：{total_earned:,}")
 
 # 2. 一鍵紀錄按鈕（每個分類各自一個和紙紋理容器，按鈕等寬並排）
 st.subheader("點擊紀錄")
@@ -391,19 +433,39 @@ for zone, items in ACTIVITIES.items():
 
                 # 觸發貓咪圖卡彩蛋
                 if label in EASTER_EGG_TRIGGERS:
-                    egg_path = get_random_easter_egg()
-                    if egg_path:
-                        quote = get_random_quote()
-                        log_easter_egg(egg_path, quote)
-                        st.session_state["easter_egg"] = {
-                            "image": egg_path,
-                            "phrase": random.choice(EASTER_EGG_PHRASES),
-                            "quote": quote,
-                        }
-                    else:
-                        st.session_state["egg_hint"] = True
+                    trigger_easter_egg()
 
                 st.rerun()
+
+st.divider()
+
+# 大賞閣：點數經濟與戰利品庫
+st.subheader("【大賞閣】")
+
+with st.container(border=True):
+    st.markdown('<div class="wood-card-marker"></div>', unsafe_allow_html=True)
+
+    for idx, reward in enumerate(REWARDS):
+        label, price, image = reward["label"], reward["price"], reward["image"]
+
+        if label in redeemed_items:
+            st.markdown(f"**{label}**（{price:,} 點）－ 已收藏")
+            if os.path.exists(image):
+                st.image(image, use_container_width=True)
+        else:
+            st.markdown(f"**{label}**（{price:,} 點）")
+            if st.button(
+                "兌換",
+                use_container_width=True,
+                disabled=available_points < price,
+                key=f"redeem_{idx}",
+            ):
+                log_redemption(label, price)
+                trigger_easter_egg()
+                st.rerun()
+
+        if idx < len(REWARDS) - 1:
+            st.divider()
 
 st.divider()
 
