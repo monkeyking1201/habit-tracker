@@ -288,6 +288,10 @@ st.markdown(
 
     /* 窄螢幕（手機）進一步調整字級與間距 */
     @media (max-width: 480px) {
+        /* 內容整體往下推，避免 Streamlit Cloud 在手機上的管理工具列蓋到橫幅圖片 */
+        .block-container {
+            padding-top: 3.5rem;
+        }
         h1 {
             font-size: 1.5rem !important;
         }
