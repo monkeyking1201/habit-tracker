@@ -24,27 +24,24 @@ SEASON_GOAL = 10000  # 本季目標總點數
 
 # 活動清單與點數權重
 ACTIVITIES = {
-    "高阻力區": {
+    "登高": {
         "📖 看書（40頁）": 500,
         "🖌️ 寫書法": 500,
         "🐱 帶貓散步": 500,
     },
-    "心流區": {
+    "乘興": {
         "🧹 打掃（清動線）": 300,
         "♟️ 擺棋": 300,
         "📜 讀聖經": 300,
     },
-    "微小溫暖區": {
+    "拾趣": {
         "🐾 幫貓梳毛": 150,
         "👍 稱讚別人": 150,
     },
 }
 
-ZONE_COLOR = {
-    "高阻力區": "🔥",
-    "心流區": "🌊",
-    "微小溫暖區": "☀️",
-}
+# 江戶傳統色系，用於圖表配色
+EDO_COLORS = ["#2C2C2C", "#E34234", "#2A5CAA", "#8C9E5E"]
 
 # ----------------------------
 # 隨機圖卡彩蛋設定
@@ -369,7 +366,7 @@ st.divider()
 st.subheader("✅ 點擊紀錄")
 
 for zone, items in ACTIVITIES.items():
-    st.markdown(f"**{ZONE_COLOR[zone]} {zone}（每次 {list(items.values())[0]} 點）**")
+    st.markdown(f"**【{zone}】（每次 {list(items.values())[0]} 點）**")
     cols = st.columns(len(items))
     for col, (label, pts) in zip(cols, items.items()):
         if col.button(label, use_container_width=True, key=f"btn_{label}"):
@@ -452,15 +449,27 @@ if not df.empty:
             y="activity",
             orientation="h",
             text="count",
+            color="activity",
+            color_discrete_sequence=EDO_COLORS,
             labels={"count": "次數", "activity": ""},
         )
         fig.update_traces(textposition="outside")
-        fig.update_layout(yaxis=dict(tickfont=dict(size=14)), margin=dict(l=10, r=10, t=10, b=10))
+        fig.update_layout(
+            yaxis=dict(tickfont=dict(size=14)),
+            margin=dict(l=10, r=10, t=10, b=10),
+            showlegend=False,
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+        )
         st.plotly_chart(fig, use_container_width=True)
     else:
-        fig = px.pie(counts, values="count", names="activity")
+        fig = px.pie(counts, values="count", names="activity", color_discrete_sequence=EDO_COLORS)
         fig.update_traces(textinfo="percent+label", textfont_size=14)
-        fig.update_layout(margin=dict(l=10, r=10, t=10, b=10))
+        fig.update_layout(
+            margin=dict(l=10, r=10, t=10, b=10),
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+        )
         st.plotly_chart(fig, use_container_width=True)
 else:
     st.info("尚無紀錄，點擊上方按鈕開始記錄吧！")
@@ -501,19 +510,18 @@ else:
 st.divider()
 
 # 5. 原始數據與下載
-st.subheader("📁 原始數據紀錄")
+with st.expander("點擊展開原始數據紀錄"):
+    if not df.empty:
+        display_df = df.sort_values("timestamp", ascending=False).reset_index(drop=True)
+        st.dataframe(display_df, use_container_width=True)
 
-if not df.empty:
-    display_df = df.sort_values("timestamp", ascending=False).reset_index(drop=True)
-    st.dataframe(display_df, use_container_width=True)
-
-    csv_bytes = df.to_csv(index=False).encode("utf-8-sig")
-    st.download_button(
-        label="⬇️ 下載 CSV 數據",
-        data=csv_bytes,
-        file_name="behavior_log.csv",
-        mime="text/csv",
-        use_container_width=True,
-    )
-else:
-    st.write("目前沒有任何紀錄。")
+        csv_bytes = df.to_csv(index=False).encode("utf-8-sig")
+        st.download_button(
+            label="⬇️ 下載 CSV 數據",
+            data=csv_bytes,
+            file_name="behavior_log.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+    else:
+        st.write("目前沒有任何紀錄。")
