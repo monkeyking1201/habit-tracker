@@ -106,9 +106,11 @@ GSHEET_SCOPES = [
     "https://www.googleapis.com/auth/drive",
 ]
 
-BEHAVIOR_HEADERS = ["timestamp", "activity", "points"]
-EGG_HEADERS = ["timestamp", "image", "quote"]
-REDEMPTION_HEADERS = ["timestamp", "item", "cost"]
+# 用 tuple 而非 list，是因為下面的 get_worksheet 會被 @st.cache_resource 快取，
+# 快取的參數必須是「可雜湊（hashable）」的型態，tuple 才符合資格。
+BEHAVIOR_HEADERS = ("timestamp", "activity", "points")
+EGG_HEADERS = ("timestamp", "image", "quote")
+REDEMPTION_HEADERS = ("timestamp", "item", "cost")
 
 
 @st.cache_resource(show_spinner=False)
@@ -143,15 +145,43 @@ def get_spreadsheet():
         st.stop()
 
 
-def get_worksheet(name: str, headers: list):
-    """取得指定名稱的工作表，若不存在則自動建立並寫入標題列。"""
+@st.cache_resource(show_spinner=False)
+def get_worksheet(name: str, headers: tuple):
+    """取得指定名稱的工作表，若不存在則自動建立並寫入標題列。
+
+    這裡用 @st.cache_resource 快取「工作表物件」本身：gspread 每次呼叫
+    sh.worksheet(name) 都會額外打一次 API 去查詢試算表結構，互動一多
+    很容易撞到 Google Sheets 的請求配額（429 錯誤）。快取後同一個工作表
+    在整個 App 生命週期只會查詢一次。
+    """
     sh = get_spreadsheet()
     try:
         ws = sh.worksheet(name)
     except gspread.exceptions.WorksheetNotFound:
         ws = sh.add_worksheet(title=name, rows=2000, cols=max(len(headers), 3))
-        ws.append_row(headers)
+        ws.append_row(list(headers))
     return ws
+
+
+def safe_get_all_records(ws) -> list:
+    """讀取工作表所有紀錄；遇到 Google Sheets API 暫時性錯誤（例如配額超限）
+    時顯示溫和提示並回傳空清單，避免整個頁面崩潰。
+    """
+    try:
+        return ws.get_all_records()
+    except gspread.exceptions.APIError:
+        st.warning("Google Sheets 目前連線忙碌（可能是短時間內操作太頻繁），請稍候約 1 分鐘後重新整理頁面。")
+        return []
+
+
+def safe_append_row(ws, row: list) -> bool:
+    """寫入一列資料；遇到 Google Sheets API 暫時性錯誤時顯示溫和提示，不中斷頁面。"""
+    try:
+        ws.append_row(row, value_input_option="USER_ENTERED")
+        return True
+    except gspread.exceptions.APIError:
+        st.warning("Google Sheets 目前連線忙碌，這筆紀錄可能尚未儲存成功，請稍候再試一次。")
+        return False
 
 
 # ----------------------------
@@ -159,7 +189,7 @@ def get_worksheet(name: str, headers: list):
 # ----------------------------
 def load_data() -> pd.DataFrame:
     ws = get_worksheet("behavior_log", BEHAVIOR_HEADERS)
-    records = ws.get_all_records()
+    records = safe_get_all_records(ws)
     df = pd.DataFrame(records, columns=BEHAVIOR_HEADERS)
     if not df.empty:
         df["points"] = pd.to_numeric(df["points"], errors="coerce").fillna(0).astype(int)
@@ -169,12 +199,12 @@ def load_data() -> pd.DataFrame:
 
 def append_record(activity: str, points: int) -> None:
     ws = get_worksheet("behavior_log", BEHAVIOR_HEADERS)
-    ws.append_row([now_str(), activity, int(points)], value_input_option="USER_ENTERED")
+    safe_append_row(ws, [now_str(), activity, int(points)])
 
 
 def load_egg_log() -> pd.DataFrame:
     ws = get_worksheet("easter_egg_log", EGG_HEADERS)
-    records = ws.get_all_records()
+    records = safe_get_all_records(ws)
     df = pd.DataFrame(records, columns=EGG_HEADERS)
     if "quote" not in df.columns:
         df["quote"] = None
@@ -185,16 +215,13 @@ def load_egg_log() -> pd.DataFrame:
 
 def log_easter_egg(image_path: str, quote) -> None:
     ws = get_worksheet("easter_egg_log", EGG_HEADERS)
-    ws.append_row(
-        [now_str(), os.path.basename(image_path), quote or ""],
-        value_input_option="USER_ENTERED",
-    )
+    safe_append_row(ws, [now_str(), os.path.basename(image_path), quote or ""])
 
 
 def load_redemptions() -> pd.DataFrame:
     """讀取大賞閣兌換紀錄，用來計算已花費點數與已解鎖的戰利品。"""
     ws = get_worksheet("redemptions", REDEMPTION_HEADERS)
-    records = ws.get_all_records()
+    records = safe_get_all_records(ws)
     df = pd.DataFrame(records, columns=REDEMPTION_HEADERS)
     if not df.empty:
         df["cost"] = pd.to_numeric(df["cost"], errors="coerce").fillna(0).astype(int)
@@ -203,7 +230,7 @@ def load_redemptions() -> pd.DataFrame:
 
 def log_redemption(item: str, cost: int) -> None:
     ws = get_worksheet("redemptions", REDEMPTION_HEADERS)
-    ws.append_row([now_str(), item, int(cost)], value_input_option="USER_ENTERED")
+    safe_append_row(ws, [now_str(), item, int(cost)])
 
 
 # ----------------------------
