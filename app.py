@@ -20,6 +20,41 @@ def now_str() -> str:
 # ----------------------------
 st.set_page_config(page_title="個人行為模式追蹤儀表板", page_icon=None, layout="centered")
 
+# ============================================================
+# Demo 模式偵測（網址後加 ?demo=true 即進入示範模式）
+# 示範模式下所有資料存在當次瀏覽的記憶體中，不會讀寫 Google Sheets
+# ============================================================
+IS_DEMO = st.query_params.get("demo", "").lower() in ("1", "true", "yes")
+
+# 示範起始點數：設計成再點幾下「登高」按鈕就能解鎖「喜相逢餐席」，製造驚喜感
+DEMO_INITIAL_EARNED = 4500
+
+# 示範模式的假圖表數據（讓行為分析圖表有內容可看）
+DEMO_FAKE_RECORDS = [
+    ("2026-06-01 08:00:00", "看書", 500),
+    ("2026-06-01 20:00:00", "書法", 500),
+    ("2026-06-02 09:00:00", "帶貓散步", 500),
+    ("2026-06-02 18:00:00", "擺棋", 300),
+    ("2026-06-03 07:30:00", "晨興與讀經", 300),
+    ("2026-06-03 11:00:00", "幫貓梳毛", 150),
+    ("2026-06-04 10:00:00", "探索 AI", 150),
+    ("2026-06-04 14:00:00", "讀英文", 150),
+    ("2026-06-05 08:00:00", "健身", 300),
+    ("2026-06-05 15:00:00", "單車遊騎", 500),
+    ("2026-06-06 09:00:00", "看書", 500),
+    ("2026-06-06 17:00:00", "家事（打掃/洗衣）", 300),
+    ("2026-06-07 08:30:00", "稱讚他人", 150),
+    ("2026-06-07 11:00:00", "書法", 500),
+]
+
+# 示範模式 Session State 初始化（只在第一次載入時執行一次）
+if IS_DEMO and "demo_initialized" not in st.session_state:
+    st.session_state.demo_initialized = True
+    st.session_state.demo_earned = DEMO_INITIAL_EARNED
+    st.session_state.demo_spent = 0
+    st.session_state.demo_redeemed = set()
+    st.session_state.demo_records = []  # 本次 session 中新增的行為紀錄
+
 # 活動清單與點數權重（已硬編碼，畫面不再提供動態新增功能）
 ACTIVITIES = {
     "登高": {
@@ -434,6 +469,9 @@ for _banner_name in ("banner.jpg", "banner.jpeg", "banner.png"):
 st.title("浮世貓百景：日常行為繪卷")
 st.caption("落子、掃拭、賞貓，鐫刻專屬的行為版畫")
 
+if IS_DEMO:
+    st.info("目前為示範模式 — 數據僅在此次瀏覽中有效，不會影響真實紀錄。重新整理頁面即可重置。")
+
 # 加到手機主畫面教學
 with st.expander("把這個網頁加到手機主畫面，當 App 使用"):
     st.markdown(
@@ -464,14 +502,26 @@ if "easter_egg" in st.session_state:
 if st.session_state.pop("egg_hint", False):
     st.info("請將專屬畫作放入 cat_easter_eggs 資料夾以解鎖彩蛋")
 
-df = load_data()
-total_earned = int(df["points"].sum()) if not df.empty else 0
+if IS_DEMO:
+    # 示範模式：全從 session_state 讀取，不碰 Google Sheets
+    total_earned = st.session_state.get("demo_earned", DEMO_INITIAL_EARNED)
+    total_spent = st.session_state.get("demo_spent", 0)
+    redeemed_items = st.session_state.get("demo_redeemed", set())
+    available_points = total_earned - total_spent
 
-redemptions_df = load_redemptions()
-total_spent = int(redemptions_df["cost"].sum()) if not redemptions_df.empty else 0
-redeemed_items = set(redemptions_df["item"]) if not redemptions_df.empty else set()
+    _all_records = DEMO_FAKE_RECORDS + st.session_state.get("demo_records", [])
+    df = pd.DataFrame(_all_records, columns=BEHAVIOR_HEADERS)
+    df["points"] = pd.to_numeric(df["points"], errors="coerce").fillna(0).astype(int)
+    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+else:
+    df = load_data()
+    total_earned = int(df["points"].sum()) if not df.empty else 0
 
-available_points = total_earned - total_spent
+    redemptions_df = load_redemptions()
+    total_spent = int(redemptions_df["cost"].sum()) if not redemptions_df.empty else 0
+    redeemed_items = set(redemptions_df["item"]) if not redemptions_df.empty else set()
+
+    available_points = total_earned - total_spent
 
 # 1. 氣韻存摺，包在和紙紋理容器中
 with st.container(border=True):
@@ -494,7 +544,11 @@ for zone, items in ACTIVITIES.items():
         cols = st.columns(len(items))
         for col, (label, pts) in zip(cols, items.items()):
             if col.button(label, use_container_width=True, key=f"btn_{label}"):
-                append_record(label, pts)
+                if IS_DEMO:
+                    st.session_state.demo_earned = st.session_state.get("demo_earned", DEMO_INITIAL_EARNED) + pts
+                    st.session_state.demo_records = st.session_state.get("demo_records", []) + [(now_str(), label, pts)]
+                else:
+                    append_record(label, pts)
                 st.toast(f"已記錄：{label} (+{pts} 點)")
 
                 # 觸發貓咪圖卡彩蛋
@@ -539,7 +593,13 @@ with st.container(border=True):
                     disabled=available_points < price,
                     key=f"redeem_{idx}",
                 ):
-                    log_redemption(label, price)
+                    if IS_DEMO:
+                        st.session_state.demo_spent = st.session_state.get("demo_spent", 0) + price
+                        _redeemed = st.session_state.get("demo_redeemed", set())
+                        _redeemed.add(label)
+                        st.session_state.demo_redeemed = _redeemed
+                    else:
+                        log_redemption(label, price)
                     trigger_easter_egg()
                     st.rerun()
 
