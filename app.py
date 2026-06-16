@@ -308,7 +308,8 @@ def trigger_easter_egg() -> None:
     egg_path = get_random_easter_egg()
     if egg_path:
         quote = get_random_quote()
-        log_easter_egg(egg_path, quote)
+        if not IS_DEMO:  # 示範模式下不寫入真實的 Google Sheets
+            log_easter_egg(egg_path, quote)
         st.session_state["easter_egg"] = {
             "image": egg_path,
             "phrase": random.choice(EASTER_EGG_PHRASES),
@@ -653,7 +654,8 @@ st.divider()
 # 4. 我的圖卡收藏
 st.subheader("我的圖卡收藏")
 
-egg_log = load_egg_log()
+# 示範模式下不讀真實的 Google Sheets 圖卡紀錄，回傳空表即可
+egg_log = pd.DataFrame(columns=EGG_HEADERS) if IS_DEMO else load_egg_log()
 if not egg_log.empty:
     collected = egg_log["image"].value_counts()
     st.caption(f"已收集 {len(collected)} 款不同圖卡，累積抽中 {len(egg_log)} 次")
